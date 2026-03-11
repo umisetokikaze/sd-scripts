@@ -87,6 +87,49 @@ def get_preferred_device() -> torch.device:
     return device
 
 
+
+def _normalize_cuda_arch(arch) -> Optional[str]:
+    if isinstance(arch, str):
+        return arch if arch.startswith("sm_") else None
+    if isinstance(arch, (tuple, list)) and len(arch) >= 2:
+        return f"sm_{int(arch[0])}{int(arch[1])}"
+    return None
+
+
+def validate_cuda_device_compatibility(device: Optional[Union[str, torch.device]] = None):
+    if not HAS_CUDA:
+        return
+
+    if device is None:
+        device = torch.device("cuda")
+    elif isinstance(device, str):
+        device = torch.device(device)
+
+    if device.type != "cuda":
+        return
+
+    get_arch_list = getattr(torch.cuda, "get_arch_list", None)
+    if get_arch_list is None:
+        return
+
+    try:
+        supported_arches = sorted(
+            {arch_name for arch_name in (_normalize_cuda_arch(arch) for arch in get_arch_list()) if arch_name is not None}
+        )
+        device_arch = _normalize_cuda_arch(torch.cuda.get_device_capability(device))
+        device_name = torch.cuda.get_device_name(device)
+    except Exception:
+        return
+
+    if supported_arches and device_arch is not None and device_arch not in supported_arches:
+        cuda_version = getattr(torch.version, "cuda", None)
+        cuda_suffix = f" with CUDA {cuda_version}" if cuda_version else ""
+        supported = ", ".join(supported_arches)
+        raise RuntimeError(
+            f"CUDA device '{device_name}' reports {device_arch}, but this PyTorch build{cuda_suffix} only supports {supported}. "
+            + "Install a PyTorch build that includes kernels for this GPU from https://pytorch.org/get-started/locally/ or build PyTorch from source."
+        )
+
 def init_ipex():
     """
     Apply IPEX to CUDA hijacks using `library.ipex.ipex_init`.
