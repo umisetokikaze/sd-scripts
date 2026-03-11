@@ -40,6 +40,7 @@ def setup_parser() -> argparse.ArgumentParser:
     train_util.add_sd_models_arguments(parser)
     train_util.add_optimizer_arguments(parser)
     train_util.add_training_arguments(parser, support_dreambooth=False)
+    custom_train_functions.add_custom_train_arguments(parser, support_weighted_captions=False)
     add_logging_arguments(parser)
 
     parser.add_argument(
