@@ -6,6 +6,7 @@ from typing import Any, Iterable, List, Optional, Sequence, Tuple, Union
 import torch
 import yaml
 
+from library import sdxl_train_util
 
 ResolutionValue = Union[int, Tuple[int, int]]
 
@@ -461,7 +462,6 @@ def get_add_time_ids(
         add_time_ids = add_time_ids.to(device)
     return add_time_ids
 
-
 def predict_noise_xl(
     unet,
     scheduler,
@@ -473,13 +473,14 @@ def predict_noise_xl(
 ):
     latent_model_input = torch.cat([latents] * 2)
     latent_model_input = scheduler.scale_model_input(latent_model_input, timestep)
-    added_cond_kwargs = {"text_embeds": prompt_embeds.pooled_embeds, "time_ids": add_time_ids}
-    noise_pred = unet(
-        latent_model_input,
-        timestep,
-        encoder_hidden_states=prompt_embeds.text_embeds,
-        added_cond_kwargs=added_cond_kwargs,
-    ).sample
+
+    orig_size = add_time_ids[:, :2]
+    crop_size = add_time_ids[:, 2:4]
+    target_size = add_time_ids[:, 4:6]
+    size_embeddings = sdxl_train_util.get_size_embeddings(orig_size, crop_size, target_size, latent_model_input.device)
+    vector_embedding = torch.cat([prompt_embeds.pooled_embeds, size_embeddings.to(prompt_embeds.pooled_embeds.dtype)], dim=1)
+
+    noise_pred = unet(latent_model_input, timestep, prompt_embeds.text_embeds, vector_embedding)
     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
     return noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
