@@ -98,11 +98,17 @@ def save_weights_sd(file, state_dict, dtype, metadata):
 
     if os.path.splitext(file)[1] == ".safetensors":
         from safetensors.torch import save_file
-        from library import train_util
+        try:
+            from library.model_io import precalculate_safetensors_hashes
+        except ModuleNotFoundError as e:
+            if e.name != "library.model_io":
+                raise
+            # リファクタリング前の sd-scripts との互換性を保つ。
+            from library.train_util import precalculate_safetensors_hashes
 
         if metadata is None:
             metadata = {}
-        model_hash, legacy_hash = train_util.precalculate_safetensors_hashes(state_dict, metadata)
+        model_hash, legacy_hash = precalculate_safetensors_hashes(state_dict, metadata)
         metadata["sshs_model_hash"] = model_hash
         metadata["sshs_legacy_hash"] = legacy_hash
         save_file(state_dict, file, metadata)
@@ -220,10 +226,11 @@ def extract_module_state(
 
         if found_key is None:
             suffix = f".{original_name}.{param_name}"
-            for key in keys:
-                if key.endswith(suffix):
-                    found_key = key
-                    break
+            matches = sorted(key for key in keys if key.startswith("base_model.model.") and key.endswith(suffix))
+            if len(matches) > 1:
+                raise ValueError(f"Ambiguous PEFT weight keys for {lora_name}.{param_name}: {matches}")
+            if matches:
+                found_key = matches[0]
 
         if found_key is not None:
             state[param_name] = weights_sd[found_key]

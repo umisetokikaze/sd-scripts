@@ -542,8 +542,12 @@ class BOFTNetwork(nn.Module):
         params = []
         descriptions = []
 
-        for te_idx, prefix in enumerate((LORA_PREFIX_TEXT_ENCODER, LORA_PREFIX_TEXT_ENCODER1, LORA_PREFIX_TEXT_ENCODER2)):
-            te_loras = [lora for lora in self.text_encoder_loras if lora.lora_name.startswith(prefix)]
+        for prefix, te_idx in (
+            (LORA_PREFIX_TEXT_ENCODER, 0),
+            (LORA_PREFIX_TEXT_ENCODER1, 0),
+            (LORA_PREFIX_TEXT_ENCODER2, 1),
+        ):
+            te_loras = [lora for lora in self.text_encoder_loras if lora.lora_name.startswith(prefix + "_")]
             if not te_loras:
                 continue
             lr = text_encoder_lr[te_idx] if te_idx < len(text_encoder_lr) else text_encoder_lr[0]
